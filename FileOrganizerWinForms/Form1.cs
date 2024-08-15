@@ -17,7 +17,7 @@ namespace FileOrganizerWinForms
 
         private void cmbOrganizationType_SelectedIndexChanged(object sender, EventArgs e)
         {
-            // Show the Organize button only if a valid option is selected (not the placeholder)
+            //Show the Organize button only if a valid option is selected (not the placeholder)
             btnOrganize.Visible = cmbOrganizationType.SelectedIndex > 0;
         }
 
