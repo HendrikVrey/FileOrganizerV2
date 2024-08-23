@@ -27,11 +27,11 @@ namespace FileOrganizerWinForms
             //Set the default theme and color scheme
             materialSkinManager.Theme = MaterialSkinManager.Themes.LIGHT;
             materialSkinManager.ColorScheme = new ColorScheme(
-                Primary.Grey800,      //Primary color
-                Primary.Grey900,      //Darker shade of primary color
-                Primary.Grey500,      //Lighter shade of primary color
-                Accent.Teal700,       //Accent color for highlights
-                TextShade.WHITE       //Text color
+                Primary.LightBlue300,    // Matches the light blue in the icon
+                Primary.LightBlue500,    // Darker blue for contrast
+                Primary.LightBlue200,    // Lighter blue for hover or background
+                Accent.LightGreen400,      // Soft lavender for accents (e.g., buttons)
+                TextShade.BLACK          // Black text for high contrast
             );
         }
 
