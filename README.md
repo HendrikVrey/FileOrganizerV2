@@ -12,4 +12,12 @@ Use this for those very messy folders to organize them.
 
 V2 changes FileOrganizer to have a GUI for a better user experience.
 
-Added .exe file. Download project and run .exe to install if you do not want to compile.
+To Lazy to build and compile?
+
+Download zipped folder called: FileOrganizer.zip and extract. Run .exe to use program.
+
+**Updates:**
+**V1.1.0*:*
+* Added MaterialSkin.2 NuGet package and changed UI to be more modern
+* Removed .exe file, replaced with a zipped folder called FileOrganizer.zip
+
