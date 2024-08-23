@@ -14,7 +14,9 @@ V2 changes FileOrganizer to have a GUI for a better user experience.
 
 To Lazy to build and compile?
 
-Download zipped folder called: FileOrganizer.zip and extract. Run .exe to use program.
+Download zipped folder called: FileOrganizer.zip and extract. 
+
+Run .exe to use program.
 
 **Updates:**
 **V1.1.0*:*
