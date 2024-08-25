@@ -13,7 +13,7 @@ namespace FileOrganizerWinForms
         private Dictionary<string, string> originalPaths = new Dictionary<string, string>();
         //List to keep track of directories created during file organization
         private List<string> createdDirectories = new List<string>();
-        // nstance of MaterialSkinManager to manage themes and colors
+        //Instance of MaterialSkinManager to manage themes and colors
         private readonly MaterialSkinManager materialSkinManager;
 
         public Form1()
