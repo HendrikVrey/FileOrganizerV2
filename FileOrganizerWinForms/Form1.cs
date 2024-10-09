@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
 using System.Windows.Forms;
 using MaterialSkin;
 using MaterialSkin.Controls;
@@ -15,17 +16,23 @@ namespace FileOrganizerWinForms
         private List<string> createdDirectories = new List<string>();
         //Instance of MaterialSkinManager to manage themes and colors
         private readonly MaterialSkinManager materialSkinManager;
+        //File path of settings
+        private readonly string settingsFilePath;
 
         public Form1()
         {
             InitializeComponent();
 
+            //Path to save the settings file in the Documents folder
+            settingsFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "FileOrganizerSettings.json");
+
             //Initialize MaterialSkinManager with the current form
             materialSkinManager = MaterialSkinManager.Instance;
             materialSkinManager.AddFormToManage(this);
 
-            //Set the default theme and color scheme
-            materialSkinManager.Theme = MaterialSkinManager.Themes.LIGHT;
+            //Load saved settings (if available) on startup
+            LoadSettings();
+
             materialSkinManager.ColorScheme = new ColorScheme(
                 Primary.LightBlue300,    
                 Primary.LightBlue500,    
@@ -273,6 +280,48 @@ namespace FileOrganizerWinForms
             {
                 materialSkinManager.Theme = MaterialSkinManager.Themes.LIGHT;
             }
+
+            //Save the current theme state to a file
+            SaveSettings();
+        }
+
+        //Method to save the current theme state to a JSON file
+        private void SaveSettings()
+        {
+            var settings = new
+            {
+                IsDarkMode = toggleDarkMode.Checked
+            };
+
+            string json = JsonSerializer.Serialize(settings);
+            File.WriteAllText(settingsFilePath, json);
+        }
+
+        //Method to load the theme state from the JSON file
+        private void LoadSettings()
+        {
+            if (File.Exists(settingsFilePath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(settingsFilePath);
+                    var settings = JsonSerializer.Deserialize<Settings>(json);
+
+                    // Apply the saved theme state
+                    toggleDarkMode.Checked = settings.IsDarkMode;
+                    materialSkinManager.Theme = settings.IsDarkMode ? MaterialSkinManager.Themes.DARK : MaterialSkinManager.Themes.LIGHT;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error loading settings: {ex.Message}");
+                }
+            }
+        }
+
+        //Class to represent the settings data
+        private class Settings
+        {
+            public bool IsDarkMode { get; set; }
         }
     }
 }
