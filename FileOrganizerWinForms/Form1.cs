@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Windows.Forms;
 using MaterialSkin;
@@ -11,9 +13,9 @@ namespace FileOrganizerWinForms
     public partial class Form1 : MaterialForm
     {
         //Dictionary to store original file paths before organizing
-        private Dictionary<string, string> originalPaths = new Dictionary<string, string>();
+        private readonly Dictionary<string, string> originalPaths = new Dictionary<string, string>();
         //List to keep track of directories created during file organization
-        private List<string> createdDirectories = new List<string>();
+        private readonly List<string> createdDirectories = new List<string>();
         //Instance of MaterialSkinManager to manage themes and colors
         private readonly MaterialSkinManager materialSkinManager;
         //File path of settings
@@ -24,7 +26,10 @@ namespace FileOrganizerWinForms
             InitializeComponent();
 
             //Path to save the settings file in the Documents folder
-            settingsFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "FileOrganizerSettings.json");
+            settingsFilePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "FileOrganizerSettings.json"
+            );
 
             //Initialize MaterialSkinManager with the current form
             materialSkinManager = MaterialSkinManager.Instance;
@@ -33,64 +38,75 @@ namespace FileOrganizerWinForms
             //Load saved settings (if available) on startup
             LoadSettings();
 
+            // Set the color scheme for the application
             materialSkinManager.ColorScheme = new ColorScheme(
-                Primary.LightBlue300,    
-                Primary.LightBlue500,    
-                Primary.LightBlue200,    
-                Accent.LightGreen400,      
-                TextShade.BLACK          
+                Primary.LightBlue300,
+                Primary.LightBlue500,
+                Primary.LightBlue200,
+                Accent.LightGreen400,
+                TextShade.BLACK
             );
         }
 
         //Event handler when the organization type is changed in the ComboBox
         private void cmbOrganizationType_SelectedIndexChanged(object sender, EventArgs e)
         {
-            //Show the "Organize" button only if a valid option is selected
+            //Enable the "Organize" button only if a valid option is selected
             btnOrganize.Visible = cmbOrganizationType.SelectedIndex > 0;
         }
 
         //Event handler for the "Organize" button click
         private void btnOrganize_Click(object sender, EventArgs e)
         {
-            string directoryPath = txtDirectoryPath.Text;
+            string directoryPath = txtDirectoryPath.Text.Trim();
 
-            //Check if the directory exists and contains files
-            if (Directory.Exists(directoryPath) && Directory.GetFiles(directoryPath).Length > 0)
+            //Validate directory path
+            if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
             {
-                try
-                {
-                    //Perform file organization based on the selected option
-                    switch (cmbOrganizationType.SelectedItem.ToString())
-                    {
-                        case "By Type":
-                            OrganizeFilesByType(directoryPath);
-                            break;
-                        case "By Date":
-                            OrganizeFilesByDate(directoryPath);
-                            break;
-                        case "By Size":
-                            OrganizeFilesBySize(directoryPath);
-                            break;
-                        case "By Type and Date":
-                            OrganizeFilesByTypeAndDate(directoryPath);
-                            break;
-                        default:
-                            //Invalid option message
-                            lblStatus.Text = "Please select a valid organization type.";
-                            return;
-                    }
-                    lblStatus.Text = "Files have been organized successfully.";
-                }
-                catch (Exception ex)
-                {
-                    //Display an error message if something goes wrong
-                    lblStatus.Text = $"An error occurred: {ex.Message}";
-                }
+                lblStatus.Text = "Invalid directory path.";
+                return;
             }
-            else
+
+            //Check if the directory contains any files
+            if (!Directory.EnumerateFiles(directoryPath).Any())
             {
-                //Invalid directory or empty directory message
-                lblStatus.Text = "Invalid directory path or directory is empty.";
+                lblStatus.Text = "Directory is empty.";
+                return;
+            }
+
+            //Ensure an organization type is selected
+            if (cmbOrganizationType.SelectedItem == null)
+            {
+                lblStatus.Text = "Please select an organization type.";
+                return;
+            }
+
+            try
+            {
+                //Perform file organization based on the selected option
+                switch (cmbOrganizationType.SelectedItem.ToString())
+                {
+                    case "By Type":
+                        OrganizeFiles(directoryPath, GetTypeDirectory);
+                        break;
+                    case "By Date":
+                        OrganizeFiles(directoryPath, GetDateDirectory);
+                        break;
+                    case "By Size":
+                        OrganizeFiles(directoryPath, GetSizeDirectory);
+                        break;
+                    case "By Type and Date":
+                        OrganizeFiles(directoryPath, GetTypeAndDateDirectory);
+                        break;
+                    default:
+                        lblStatus.Text = "Please select a valid organization type.";
+                        return;
+                }
+                lblStatus.Text = "Files have been organized successfully.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = $"An error occurred: {ex.Message}";
             }
         }
 
@@ -113,144 +129,146 @@ namespace FileOrganizerWinForms
             UndoLastSort();
         }
 
-        //Method to organize files by their type (extension)
-        private void OrganizeFilesByType(string directoryPath)
+        //Method to organize files based on a provided criterion
+        private void OrganizeFiles(string directoryPath, Func<string, string, string> getDestinationDirectory)
         {
             var files = Directory.GetFiles(directoryPath);
+            var errors = new StringBuilder();
+
             foreach (var file in files)
             {
-                string originalPath = file;
-                //Get the file extension and convert it to uppercase
-                string extension = Path.GetExtension(file).TrimStart('.').ToUpper();
-                //Create a directory for the file type (extension)
-                string destinationDirectory = Path.Combine(directoryPath, extension);
-
-                if (!Directory.Exists(destinationDirectory))
+                try
                 {
-                    Directory.CreateDirectory(destinationDirectory);
-                    createdDirectories.Add(destinationDirectory); //Keep track of created directories
-                }
+                    string destinationDirectory = getDestinationDirectory(directoryPath, file);
 
-                //Move the file to its new location
-                string destinationFile = Path.Combine(destinationDirectory, Path.GetFileName(file));
-                originalPaths[destinationFile] = originalPath; //Store original path
-                File.Move(file, destinationFile); //Move the file
+                    if (!Directory.Exists(destinationDirectory))
+                    {
+                        Directory.CreateDirectory(destinationDirectory);
+                        createdDirectories.Add(destinationDirectory); //Keep track of created directories
+                    }
+
+                    //Move the file to its new location
+                    string destinationFile = Path.Combine(destinationDirectory, Path.GetFileName(file));
+                    originalPaths[destinationFile] = file; //Store original path
+
+                    if (File.Exists(destinationFile))
+                    {
+                        //Handle the case where the destination file already exists
+                        destinationFile = GetUniqueFileName(destinationFile);
+                    }
+
+                    File.Move(file, destinationFile); //Move the file
+                }
+                catch (Exception ex)
+                {
+                    //Collect error messages
+                    errors.AppendLine($"Error moving file {file}: {ex.Message}");
+                }
+            }
+
+            //Display errors if any
+            if (errors.Length > 0)
+            {
+                MessageBox.Show(errors.ToString(), "Errors Occurred", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        //Method to organize files by their creation date (year and month)
-        private void OrganizeFilesByDate(string directoryPath)
+        //Helper method to get destination directory based on file type
+        private string GetTypeDirectory(string directoryPath, string file)
         {
-            var files = Directory.GetFiles(directoryPath);
-            foreach (var file in files)
-            {
-                string originalPath = file;
-                //Get the file's creation date and format it as "yyyy-MM"
-                DateTime creationDate = File.GetCreationTime(file);
-                string yearMonth = creationDate.ToString("yyyy-MM");
-
-                //Create a directory based on the creation date
-                string destinationDirectory = Path.Combine(directoryPath, yearMonth);
-
-                if (!Directory.Exists(destinationDirectory))
-                {
-                    Directory.CreateDirectory(destinationDirectory);
-                    createdDirectories.Add(destinationDirectory); //Track created directories
-                }
-
-                //Move the file to the new date-based directory
-                string destinationFile = Path.Combine(destinationDirectory, Path.GetFileName(file));
-                originalPaths[destinationFile] = originalPath; //Store original path
-                File.Move(file, destinationFile);
-            }
+            string extension = Path.GetExtension(file).TrimStart('.').ToUpperInvariant();
+            return Path.Combine(directoryPath, extension);
         }
 
-        //Method to organize files by size category (small, medium, large, etc.)
-        private void OrganizeFilesBySize(string directoryPath)
+        //Helper method to get destination directory based on file date
+        private string GetDateDirectory(string directoryPath, string file)
         {
-            var files = Directory.GetFiles(directoryPath);
-            foreach (var file in files)
-            {
-                string originalPath = file;
-                //Get the size of the file
-                long fileSize = new FileInfo(file).Length;
-                //Determine the size category (e.g., Small, Medium, Large)
-                string sizeCategory = GetSizeCategory(fileSize);
+            DateTime creationDate = File.GetCreationTime(file);
+            string yearMonth = creationDate.ToString("yyyy-MM");
+            return Path.Combine(directoryPath, yearMonth);
+        }
 
-                //Create a directory based on the file size category
-                string destinationDirectory = Path.Combine(directoryPath, sizeCategory);
+        //Helper method to get destination directory based on file size
+        private string GetSizeDirectory(string directoryPath, string file)
+        {
+            long fileSize = new FileInfo(file).Length;
+            string sizeCategory = GetSizeCategory(fileSize);
+            return Path.Combine(directoryPath, sizeCategory);
+        }
 
-                if (!Directory.Exists(destinationDirectory))
-                {
-                    Directory.CreateDirectory(destinationDirectory);
-                    createdDirectories.Add(destinationDirectory); //Track created directories
-                }
-
-                //Move the file to the new size-based directory
-                string destinationFile = Path.Combine(destinationDirectory, Path.GetFileName(file));
-                originalPaths[destinationFile] = originalPath; //Store original path
-                File.Move(file, destinationFile);
-            }
+        //Helper method to get destination directory based on file type and date
+        private string GetTypeAndDateDirectory(string directoryPath, string file)
+        {
+            string extension = Path.GetExtension(file).TrimStart('.').ToUpperInvariant();
+            DateTime creationDate = File.GetCreationTime(file);
+            string yearMonth = creationDate.ToString("yyyy-MM");
+            return Path.Combine(directoryPath, extension, yearMonth);
         }
 
         //Helper method to categorize files by size
         private string GetSizeCategory(long fileSize)
         {
-            if (fileSize < 1048576) //Less than 1MB
-            {
+            if (fileSize < 1_048_576) //Less than 1MB
                 return "Small (Less than 1MB)";
-            }
-            else if (fileSize < 10485760) //1MB to 10MB
-            {
+            else if (fileSize < 10_485_760) //1MB to 10MB
                 return "Medium (1MB to 10MB)";
-            }
-            else if (fileSize < 104857600) //10MB to 100MB
-            {
+            else if (fileSize < 104_857_600) //10MB to 100MB
                 return "Large (10MB to 100MB)";
-            }
             else //100MB and above
-            {
                 return "Extra Large (100MB and above)";
-            }
         }
 
-        //Method to organize files by both type (extension) and creation date
-        private void OrganizeFilesByTypeAndDate(string directoryPath)
+        //Helper method to get a unique file name if the file already exists
+        private string GetUniqueFileName(string filePath)
         {
-            var files = Directory.GetFiles(directoryPath);
-            foreach (var file in files)
+            string directory = Path.GetDirectoryName(filePath);
+            string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(filePath);
+            string extension = Path.GetExtension(filePath);
+
+            int count = 1;
+            string newFilePath;
+            do
             {
-                string originalPath = file;
-                //Get the file extension and creation date
-                string extension = Path.GetExtension(file).TrimStart('.').ToUpper();
-                DateTime creationDate = File.GetCreationTime(file);
-                string yearMonth = creationDate.ToString("yyyy-MM");
+                string newFileName = $"{fileNameWithoutExtension} ({count++}){extension}";
+                newFilePath = Path.Combine(directory, newFileName);
+            } while (File.Exists(newFilePath));
 
-                //Create a directory based on file type and date
-                string destinationDirectory = Path.Combine(directoryPath, extension, yearMonth);
-
-                if (!Directory.Exists(destinationDirectory))
-                {
-                    Directory.CreateDirectory(destinationDirectory);
-                    createdDirectories.Add(destinationDirectory); //Track created directories
-                }
-
-                //Move the file to the new type-and-date-based directory
-                string destinationFile = Path.Combine(destinationDirectory, Path.GetFileName(file));
-                originalPaths[destinationFile] = originalPath; //Store original path
-                File.Move(file, destinationFile);
-            }
+            return newFilePath;
         }
 
         //Method to undo the last file organization by restoring original paths
         private void UndoLastSort()
         {
+            var errors = new StringBuilder();
+
             //Move each file back to its original path
             foreach (var kvp in originalPaths)
             {
-                if (File.Exists(kvp.Key))
+                try
                 {
-                    File.Move(kvp.Key, kvp.Value);
+                    if (File.Exists(kvp.Key))
+                    {
+                        string destinationDirectory = Path.GetDirectoryName(kvp.Value);
+                        if (!Directory.Exists(destinationDirectory))
+                        {
+                            Directory.CreateDirectory(destinationDirectory);
+                        }
+
+                        string destinationFile = kvp.Value;
+
+                        if (File.Exists(destinationFile))
+                        {
+                            //Handle if the original file exists
+                            destinationFile = GetUniqueFileName(destinationFile);
+                        }
+
+                        File.Move(kvp.Key, destinationFile);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    //Collect error messages
+                    errors.AppendLine($"Error restoring file {kvp.Key}: {ex.Message}");
                 }
             }
             originalPaths.Clear();
@@ -258,28 +276,36 @@ namespace FileOrganizerWinForms
             //Delete any directories created during the sort
             foreach (var dir in createdDirectories)
             {
-                if (Directory.Exists(dir))
+                try
                 {
-                    Directory.Delete(dir, true);
+                    if (Directory.Exists(dir))
+                    {
+                        Directory.Delete(dir, true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.AppendLine($"Error deleting directory {dir}: {ex.Message}");
                 }
             }
             createdDirectories.Clear();
 
             lblStatus.Text = "Last sort has been undone.";
+
+            //Display errors if any
+            if (errors.Length > 0)
+            {
+                MessageBox.Show(errors.ToString(), "Errors Occurred", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         //Event handler to toggle between dark and light modes
         private void toggleDarkMode_CheckedChanged(object sender, EventArgs e)
         {
             //Change the theme based on the toggle switch state
-            if (toggleDarkMode.Checked)
-            {
-                materialSkinManager.Theme = MaterialSkinManager.Themes.DARK;
-            }
-            else
-            {
-                materialSkinManager.Theme = MaterialSkinManager.Themes.LIGHT;
-            }
+            materialSkinManager.Theme = toggleDarkMode.Checked
+                ? MaterialSkinManager.Themes.DARK
+                : MaterialSkinManager.Themes.LIGHT;
 
             //Save the current theme state to a file
             SaveSettings();
@@ -288,13 +314,20 @@ namespace FileOrganizerWinForms
         //Method to save the current theme state to a JSON file
         private void SaveSettings()
         {
-            var settings = new
+            var settings = new Settings
             {
                 IsDarkMode = toggleDarkMode.Checked
             };
 
-            string json = JsonSerializer.Serialize(settings);
-            File.WriteAllText(settingsFilePath, json);
+            try
+            {
+                string json = JsonSerializer.Serialize(settings);
+                File.WriteAllText(settingsFilePath, json);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error saving settings: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         //Method to load the theme state from the JSON file
@@ -307,13 +340,19 @@ namespace FileOrganizerWinForms
                     string json = File.ReadAllText(settingsFilePath);
                     var settings = JsonSerializer.Deserialize<Settings>(json);
 
-                    // Apply the saved theme state
+                    //Apply the saved theme state
                     toggleDarkMode.Checked = settings.IsDarkMode;
-                    materialSkinManager.Theme = settings.IsDarkMode ? MaterialSkinManager.Themes.DARK : MaterialSkinManager.Themes.LIGHT;
+                    materialSkinManager.Theme = settings.IsDarkMode
+                        ? MaterialSkinManager.Themes.DARK
+                        : MaterialSkinManager.Themes.LIGHT;
+                }
+                catch (JsonException ex)
+                {
+                    MessageBox.Show($"Error parsing settings file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error loading settings: {ex.Message}");
+                    MessageBox.Show($"Error loading settings: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
